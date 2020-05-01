@@ -37,7 +37,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
   var out: OutputStreamWriter = null
   // Open the socket to the kernel. The kernel is the server already waiting for connections.
   try {
-    socket = new Socket("localhost", port.toInt)
+    socket = new Socket("192.168.0.11", 12345)
     out = new OutputStreamWriter(socket.getOutputStream())
   } catch {
     case exception: Throwable => println("\nSPARKMONITOR_LISTENER: Exception creating socket:" + exception + "\n")
@@ -93,9 +93,10 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
   var numFailedStages = 0
   var numCompletedJobs = 0
   var numFailedJobs = 0
-
+  var applicationId = 0
   val retainedStages = conf.getInt("spark.ui.retainedStages", 1000)
   val retainedJobs = conf.getInt("spark.ui.retainedJobs", 1000)
+  val applicationName = conf.get("spark.app.name")
   val retainedTasks = 100000
 
   @volatile
@@ -114,6 +115,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     appId = appStarted.appId.getOrElse("null")
     println("SPARKMONITOR_LISTENER: Application Started: " + appId + " ...Start Time: " + appStarted.time)
     val json = ("msgtype" -> "sparkApplicationStart") ~
+      ("applicationId" -> applicationName) ~
       ("startTime" -> startTime) ~
       ("appId" -> appId) ~
       ("appAttemptId" -> appStarted.appAttemptId.getOrElse("null")) ~
@@ -132,6 +134,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     println("SPARKMONITOR_LISTENER: Application ending...End Time: " + appEnded.time)
     endTime = appEnded.time
     val json = ("msgtype" -> "sparkApplicationEnd") ~
+      ("applicationId" -> applicationName) ~
       ("endTime" -> endTime)
 
     send(pretty(render(json)))
@@ -145,10 +148,11 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
 
     (stageInfo.stageId.toString ->
       ("attemptId" -> stageInfo.attemptId) ~
-      ("name" -> stageInfo.name) ~
-      ("numTasks" -> stageInfo.numTasks) ~
-      ("completionTime" -> completionTime) ~
-      ("submissionTime" -> submissionTime))
+        ("applicationId" -> applicationName) ~
+        ("name" -> stageInfo.name) ~
+        ("numTasks" -> stageInfo.numTasks) ~
+        ("completionTime" -> completionTime) ~
+        ("submissionTime" -> submissionTime))
   }
 
   /**
@@ -197,6 +201,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     val name = jobStart.properties.getProperty("callSite.short", "null")
     // println("Num Executors" + numExecutors.toInt)
     val json = ("msgtype" -> "sparkJobStart") ~
+      ("applicationId" -> applicationName) ~
       ("jobGroup" -> jobGroup.getOrElse("null")) ~
       ("jobId" -> jobStart.jobId) ~
       ("status" -> "RUNNING") ~
@@ -254,6 +259,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     }
 
     val json = ("msgtype" -> "sparkJobEnd") ~
+      ("applicationId" -> applicationName) ~
       ("jobId" -> jobEnd.jobId) ~
       ("status" -> status) ~
       ("completionTime" -> jobData.completionTime)
@@ -299,6 +305,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     val completionTime: Long = stage.completionTime.getOrElse(-1)
     val submissionTime: Long = stage.submissionTime.getOrElse(-1)
     val json = ("msgtype" -> "sparkStageCompleted") ~
+      ("applicationId" -> applicationName) ~
       ("stageId" -> stage.stageId) ~
       ("stageAttemptId" -> stage.attemptId) ~
       ("completionTime" -> completionTime) ~
@@ -334,6 +341,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     val jobIds = activeJobsDependentOnStage
     val submissionTime: Long = stage.submissionTime.getOrElse(-1)
     val json = ("msgtype" -> "sparkStageSubmitted") ~
+      ("applicationId" -> applicationName) ~
       ("stageId" -> stage.stageId) ~
       ("stageAttemptId" -> stage.attemptId) ~
       ("name" -> stage.name) ~
@@ -365,15 +373,16 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
       jobData.numActiveTasks += 1
       val jobjson = ("jobdata" ->
         ("jobId" -> jobData.jobId) ~
-        ("numTasks" -> jobData.numTasks) ~
-        ("numActiveTasks" -> jobData.numActiveTasks) ~
-        ("numCompletedTasks" -> jobData.numCompletedTasks) ~
-        ("numSkippedTasks" -> jobData.numSkippedTasks) ~
-        ("numFailedTasks" -> jobData.numFailedTasks) ~
-        ("reasonToNumKilled" -> jobData.reasonToNumKilled) ~
-        ("numActiveStages" -> jobData.numActiveStages) ~
-        ("numSkippedStages" -> jobData.numSkippedStages) ~
-        ("numFailedStages" -> jobData.numFailedStages))
+          ("applicationId" -> applicationName) ~
+          ("numTasks" -> jobData.numTasks) ~
+          ("numActiveTasks" -> jobData.numActiveTasks) ~
+          ("numCompletedTasks" -> jobData.numCompletedTasks) ~
+          ("numSkippedTasks" -> jobData.numSkippedTasks) ~
+          ("numFailedTasks" -> jobData.numFailedTasks) ~
+          ("reasonToNumKilled" -> jobData.reasonToNumKilled) ~
+          ("numActiveStages" -> jobData.numActiveStages) ~
+          ("numSkippedStages" -> jobData.numSkippedStages) ~
+          ("numFailedStages" -> jobData.numFailedStages))
     }
     val json = ("msgtype" -> "sparkTaskStart") ~
       ("launchTime" -> taskInfo.launchTime) ~
@@ -385,6 +394,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
       ("executorId" -> taskInfo.executorId) ~
       ("host" -> taskInfo.host) ~
       ("status" -> taskInfo.status) ~
+      ("applicationId" -> applicationName) ~
       ("speculative" -> taskInfo.speculative)
 
     //println("SPARKMONITOR_LISTENER: Task Started: \n"+ pretty(render(json)) + "\n")
@@ -502,6 +512,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
         ("test" -> info.gettingResultTime)
     }
     val json = ("msgtype" -> "sparkTaskEnd") ~
+      ("applicationId" -> applicationName) ~
       ("launchTime" -> info.launchTime) ~
       ("finishTime" -> info.finishTime) ~
       ("taskId" -> info.taskId) ~
@@ -600,23 +611,23 @@ object UIData {
    * This is stored to track aggregated valus such as number of stages and tasks, and to track skipped and failed stages
    */
   class JobUIData(
-    var jobId: Int = -1,
-    var submissionTime: Option[Long] = None,
-    var completionTime: Option[Long] = None,
-    var stageIds: Seq[Int] = Seq.empty,
-    var jobGroup: Option[String] = None,
-    var status: JobExecutionStatus = JobExecutionStatus.UNKNOWN,
-    var numTasks: Int = 0,
-    var numActiveTasks: Int = 0,
-    var numCompletedTasks: Int = 0,
-    var numSkippedTasks: Int = 0,
-    var numFailedTasks: Int = 0,
-    var reasonToNumKilled: Map[String, Int] = Map.empty,
-    var numActiveStages: Int = 0,
-    // This needs to be a set instead of a simple count to prevent double-counting of rerun stages:
-    var completedStageIndices: mutable.HashSet[Int] = new mutable.HashSet[Int](),
-    var numSkippedStages: Int = 0,
-    var numFailedStages: Int = 0)
+                   var jobId: Int = -1,
+                   var submissionTime: Option[Long] = None,
+                   var completionTime: Option[Long] = None,
+                   var stageIds: Seq[Int] = Seq.empty,
+                   var jobGroup: Option[String] = None,
+                   var status: JobExecutionStatus = JobExecutionStatus.UNKNOWN,
+                   var numTasks: Int = 0,
+                   var numActiveTasks: Int = 0,
+                   var numCompletedTasks: Int = 0,
+                   var numSkippedTasks: Int = 0,
+                   var numFailedTasks: Int = 0,
+                   var reasonToNumKilled: Map[String, Int] = Map.empty,
+                   var numActiveStages: Int = 0,
+                   // This needs to be a set instead of a simple count to prevent double-counting of rerun stages:
+                   var completedStageIndices: mutable.HashSet[Int] = new mutable.HashSet[Int](),
+                   var numSkippedStages: Int = 0,
+                   var numFailedStages: Int = 0)
 
   /**
    * Data about a stage.

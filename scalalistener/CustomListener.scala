@@ -578,6 +578,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     totalCores += executorAdded.executorInfo.totalCores
     numExecutors += 1
     val json = ("msgtype" -> "sparkExecutorAdded") ~
+      ("applicationId" -> applicationName) ~
       ("executorId" -> executorAdded.executorId) ~
       ("time" -> executorAdded.time) ~
       ("host" -> executorAdded.executorInfo.executorHost) ~
@@ -593,6 +594,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
     totalCores -= executorCores.getOrElse(executorRemoved.executorId, 0)
     numExecutors -= 1
     val json = ("msgtype" -> "sparkExecutorRemoved") ~
+      ("applicationId" -> applicationName) ~
       ("executorId" -> executorRemoved.executorId) ~
       ("time" -> executorRemoved.time) ~
       ("totalCores" -> totalCores) // Sending this as browser data can be lost during reloads

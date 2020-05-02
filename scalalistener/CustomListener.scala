@@ -37,7 +37,7 @@ class JupyterSparkMonitorListener(conf: SparkConf) extends SparkListener {
   var out: OutputStreamWriter = null
   // Open the socket to the kernel. The kernel is the server already waiting for connections.
   try {
-    socket = new Socket("192.168.0.11", 12345)
+    socket = new Socket("192.168.0.12", 12345)
     out = new OutputStreamWriter(socket.getOutputStream())
   } catch {
     case exception: Throwable => println("\nSPARKMONITOR_LISTENER: Exception creating socket:" + exception + "\n")
